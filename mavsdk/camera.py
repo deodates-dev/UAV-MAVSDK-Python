@@ -1388,7 +1388,7 @@ class SettingOptions:
                 rpcSettingOptions.setting_description,
                 
                 
-                map(lambda elem: Option.translate_from_rpc(elem), rpcSettingOptions.options),
+                list(map(lambda elem: Option.translate_from_rpc(elem), rpcSettingOptions.options)),
                 
                 
                 rpcSettingOptions.is_range
@@ -1857,7 +1857,7 @@ class Camera(AsyncBase):
                 
 
             
-                yield [Setting].translate_from_rpc(response.current_settings)
+                yield list(map(lambda x : Setting.translate_from_rpc(x), response.current_settings))
         finally:
             current_settings_stream.cancel()
 
@@ -1881,7 +1881,7 @@ class Camera(AsyncBase):
                 
 
             
-                yield [SettingOptions].translate_from_rpc(response.setting_options)
+                yield list(map(lambda x : SettingOptions.translate_from_rpc(x), response.setting_options))
         finally:
             possible_setting_options_stream.cancel()
 

@@ -6,6 +6,7 @@ from . import action
 from . import calibration
 from . import camera
 from . import core
+from . import failure
 from . import follow_me
 from . import ftp
 from . import geofence
@@ -47,6 +48,10 @@ class System:
         self._port = port
 
         self._plugins = {}
+        self._server_process = None
+
+    def __del__(self):
+        self._stop_mavsdk_server()
 
     async def connect(self, system_address=None):
         """
@@ -63,11 +68,29 @@ class System:
                 - TCP: tcp://[server_host][:server_port]
 
         """
+
+        if self._server_process is not None:
+            # a mavsdk_server have already been launch by this instance:
+            # --> clean all before trying to reconnect
+            self._stop_mavsdk_server()
+
+            # add a delay to be sure recourses have been freed and restart mavsdk_server
+            import time; time.sleep(1)
+
         if self._mavsdk_server_address is None:
             self._mavsdk_server_address = 'localhost'
-            self._start_mavsdk_server(system_address,self._port)
+            self._server_process = self._start_mavsdk_server(system_address,self._port)
 
         await self._init_plugins(self._mavsdk_server_address, self._port)
+
+    def _stop_mavsdk_server(self):
+        """
+        kill the running mavsdk_server and clean the whole instance
+        """
+        import subprocess
+        if isinstance(self._server_process,subprocess.Popen):
+            self._server_process.kill()
+            self.__init__(port = self._port)
 
     async def _init_plugins(self, host, port):
         plugin_manager = await AsyncPluginManager.create(host=host, port=port)
@@ -77,6 +100,7 @@ class System:
         self._plugins["calibration"] = calibration.Calibration(plugin_manager)
         self._plugins["camera"] = camera.Camera(plugin_manager)
         self._plugins["core"] = core.Core(plugin_manager)
+        self._plugins["failure"] = failure.Failure(plugin_manager)
         self._plugins["follow_me"] = follow_me.FollowMe(plugin_manager)
         self._plugins["ftp"] = ftp.Ftp(plugin_manager)
         self._plugins["geofence"] = geofence.Geofence(plugin_manager)
@@ -122,6 +146,12 @@ class System:
             raise RuntimeError(self.error_uninitialized("Core"))
         return self._plugins["core"]
 
+    @property
+    def failure(self) -> failure.Failure:
+        if "failure" not in self._plugins:
+            raise RuntimeError(self.error_uninitialized("Failure"))
+        return self._plugins["failure"]
+    
     @property
     def follow_me(self) -> follow_me.FollowMe:
         if "follow_me" not in self._plugins:
@@ -260,3 +290,5 @@ You will need to get and run the 'mavsdk_server' binary manually:
             p.kill()
 
         atexit.register(cleanup)
+
+        return p
